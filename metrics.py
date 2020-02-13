@@ -2,6 +2,13 @@ import prometheus_client as prom
 import time
 from google.cloud import monitoring_v3
 
+class PromCounter:
+    """Prometheus counter"""
+    def __init__(self, name, desc, labels):
+        self.c = Counter(name, desc, labels)
+    def inc(self, v=1):
+        self.c.inc(v)
+
 class PromGauge:
     """Prometheus gauge"""
     def __init__(self, name, desc):
@@ -15,8 +22,8 @@ class PromGauge:
 
 class PromHistogram:
     """Prometheus histogram"""
-    def __init__(self, name, desc):
-        self.h = prom.Histogram(name, desc)
+    def __init__(self, name, desc, labels):
+        self.h = prom.Histogram(name, desc, labels)
     def observe(self, v):
         return self.h.observe(v)
 
@@ -47,20 +54,19 @@ class StackGauge:
 class StackTimeSeries:
     def __init__(self, project_id, metric_type, v):
         client = monitoring_v3.MetricServiceClient()
-        self.project = project_id
-        series = monitoring_v3.types.TimeSeries()
-        series.metric.type = "custom.googleapis.com/{}".format(metric_type)
-        point = series.points.add()
+        self.project = client.project_path(project_id)
+        self.metric_type = "custom.googleapis.com/{}".format(metric_type)
+        self.series = monitoring_v3.types.TimeSeries()
+        self.series.metric.type = self.metric_type 
+        point = self.series.points.add()
         point.value.double_value = v
         t = time.time()
         point.interval.end_time.seconds = int(t)
         point.interval.end_time.nanos = int((t - point.interval.end_time.seconds) * 10**9)
-        client.create_time_series(project_id, [series])
+        client.create_time_series(project_id, [self.series])
 
     def addPoint(v, t):
         """ Take value and time point and add to TimeSeries """
-        point = series.points.add()
+        point = self.series.points.add()
         point.value.double_value = v
         point.interval.end_time.seconds = int(t)
-
-
