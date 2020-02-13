@@ -20,8 +20,7 @@ class PromHistogram:
     def observe(self, v):
         return self.h.observe(v)
 
-def create_stack_gauge(client, project_id, metric_type):
-            
+#def create_stack_gauge(client, project_id, metric_type):
 
 class StackGauge:
     def __init__(self, client, project_id, metric_type, metric_kind, name, desc):
