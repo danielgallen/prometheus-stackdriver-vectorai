@@ -43,3 +43,24 @@ class StackGauge:
         }
         client.projects().metricDescriptors().create(
                 name=project_id, body=metrics_descriptor).execute()
+
+class StackTimeSeries:
+    def __init__(self, project_id, metric_type, v):
+        client = monitoring_v3.MetricServiceClient()
+        self.project = project_id
+        series = monitoring_v3.types.TimeSeries()
+        series.metric.type = "custom.googleapis.com/{}".format(metric_type)
+        point = series.points.add()
+        point.value.double_value = v
+        t = time.time()
+        point.interval.end_time.seconds = int(t)
+        point.interval.end_time.nanos = int((t - point.interval.end_time.seconds) * 10**9)
+        client.create_time_series(project_id, [series])
+
+    def addPoint(v, t):
+        """ Take value and time point and add to TimeSeries """
+        point = series.points.add()
+        point.value.double_value = v
+        point.interval.end_time.seconds = int(t)
+
+
