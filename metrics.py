@@ -4,60 +4,74 @@ from google.cloud import monitoring_v3
 
 class Gauge:
     """Gauge"""
-    def __init__(self, name, desc, service):
+    def __init__(self, name, desc, service, metric_type=None):
         self.service = service
         if self.service == "prometheus":
             self.g = prom.Gauge(name, desc)
         else:
-            metrics_descriptor = {
-                    "type": custom_type,
-                    "metricKind": "GAUGE",
-                    "valueType": "INT64",
-                    "unit": "items",
-                    "description": desc,
-                    "displayName": name
-            }
-            self.g = client.projects().metricDescriptors().create(
-                     name=name, body=metrics_descriptor).execute() 
+            self.client = monitoring_v3.MetricServiceClient()
+            self.project_name = self.client.project_path(name)
+            descriptor = monitoring_v3.types.MetricDescriptor()
+            descriptor.type = 'custom.googleapis.com/{}'.format(metric_type)
+            descriptor.metric_kind = (
+                    monitoring_v3.enums.MetricDescriptor.MetricKind.GAUGE)
+            descriptor.value_type = (
+                    monitoring_v3.enums.MetricDescriptor.ValueType.DOUBLE)
+            descriptor.description = desc
+            descriptor = self.client.create_metric_descriptor(self.project_name, descriptor)
+            print('Created {}.'.format(descriptor.name))
     def inc(self, v=1):
         self.g.inc(v)
     def dec(self, v=1):
         self.g.dec(v)
     def set(self, v):
-        self.g.set(v)
-    def get(self):
-        self.g
+        if self.service == "prometheus":
+            self.g.set(v)
+        else:
+            point = self.g.points.add()
+            point.value.double_value = v
+            now = time.time()
+            point.interval.end_time.seconds = int(now)
+            point.interval.end_time.nanos = int(
+                    (now - point.interval.end_time.seconds) * 10 ** 9)
+            self.client.create_time_series(project_name, [self.g])
+    def delete(self):
+        """ Delete the metric """
+        if self.service == "prometheus":
+        else:
+            self.client.delete_metric_descriptor(self.name)
 
 class Histogram:
     """Prometheus histogram"""
-    def __init__(self, name, desc, service, buckets=None):
+    def __init__(self, name, desc, service, buckets=None, client=None, valueType=None):
         self.service = service
+        self.name = name
         if self.service == "prometheus":
             if buckets:
                 self.h = prom.Histogram(name, desc, buckets=buckets)
             else:
                 self.h = prom.Histogram(name, desc)
+        else:
+            metrics_descriptor = {
+                    "type": custom_type,
+                    "name": name,
+                    "metric_type": metric_type,
+                    "metricKind": "CUMULATIVE",
+                    "valueType": "DISTRIBUTION",
+                    "description": desc
+            }
+            self.h = client.projects().metricDescriptors().create(
+                     name=name, body=metrics_descriptor).execute()
     def observe(self, v):
-        return self.h.observe(v)
+        self.h.observe(v)
+    def write(self, v):
+        if self.service == "prometheus":
+            return
+        else:
+            point = self.h.points.add()
+            point.value.
+    def delete(self):
+        if self.service == "prometheus":
 
-"""
-class StackTimeSeries:
-    def __init__(self, project_id, metric_type, v):
-        client = monitoring_v3.MetricServiceClient()
-        self.project = client.project_path(project_id)
-        self.metric_type = "custom.googleapis.com/{}".format(metric_type)
-        self.series = monitoring_v3.types.TimeSeries()
-        self.series.metric.type = self.metric_type 
-        point = self.series.points.add()
-        point.value.double_value = v
-        t = time.time()
-        point.interval.end_time.seconds = int(t)
-        point.interval.end_time.nanos = int((t - point.interval.end_time.seconds) * 10**9)
-        client.create_time_series(project_id, [self.series])
-
-    def addPoint(v, t):
-        #Take value and time point and add to TimeSeries 
-        point = self.series.points.add()
-        point.value.double_value = v
-        point.interval.end_time.seconds = int(t)
-"""
+        else:
+            self.client.delete_metric_descriptor(self.name)
