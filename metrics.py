@@ -26,7 +26,7 @@ class Gauge:
             
             # Create the metric descriptor and print a success message
             descriptor = self.client.create_metric_descriptor(self.project_name, descriptor)
-            print('StackDriver Created {}.'.format(descriptor.name))
+            print('StackDriver Gauge Created {}.'.format(descriptor.name))
 
     def inc(self, v=1):
         self.g.inc(v)
@@ -41,6 +41,7 @@ class Gauge:
             # STACKDRIVER
             # Can only write maximum of one point call per minute for an individual time series
             point = self.g.points.add()
+            # Only using double type right now
             point.value.double_value = v
             now = time.time()
             point.interval.end_time.seconds = int(now)
@@ -52,7 +53,9 @@ class Gauge:
     def delete(self):
         """ Delete the metric """
         if self.service == "prometheus":
+            # TODO
         else:
+            # Stackdriver
             self.client.delete_metric_descriptor(self.name)
 
 class Histogram:
@@ -66,16 +69,22 @@ class Histogram:
             else:
                 self.h = prom.Histogram(name, desc)
         else:
-            metrics_descriptor = {
-                    "type": custom_type,
-                    "name": name,
-                    "metric_type": metric_type,
-                    "metricKind": "CUMULATIVE",
-                    "valueType": "DISTRIBUTION",
-                    "description": desc
-            }
-            self.h = client.projects().metricDescriptors().create(
-                     name=name, body=metrics_descriptor).execute()
+            # STACKDRIVER
+            self.client = monitoring_v3.MetricServiceClient()
+            self.project_name = self.client.project_path(name)
+            descriptor = monitoring_v3.types.MetricDescriptor()
+            descriptor.type = 'custom.googleapis.com/{}'.format(metric_type)
+            # Cumulative 
+            descriptor.metric_kind = (
+                    monitoring_v3.enums.MetricDescriptor.MetricKind.CUMULATIVE)
+            # Double type (Will add switch for types later)
+            descriptor.value_type = (
+                    monitoring_v3.enums.MetricDescriptor.ValueType.DISTRIBUTION)
+            descriptor.description = desc
+            
+            # Create the metric descriptor and print a success message
+            descriptor = self.client.create_metric_descriptor(self.project_name, descriptor)
+            print('StackDriver Histogram Created {}.'.format(descriptor.name))
     def observe(self, v):
         self.h.observe(v)
     def write(self, v):
@@ -83,7 +92,12 @@ class Histogram:
             return
         else:
             point = self.h.points.add()
-            point.value.
+            point.value.double_value = v
+            now = time.time()
+            point.interval.end_time.seconds = int(now)
+            point.interval.end_time.nanos = int(
+                    (now - point.interval.end_time.seconds) * 10 ** 9)
+            self.client.create_time_series(self.name, [self.h])
     def delete(self):
         if self.service == "prometheus":
 
